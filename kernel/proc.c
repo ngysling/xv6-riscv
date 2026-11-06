@@ -452,7 +452,7 @@ scheduler(void)
         p->state = RUNNING;
         c->proc = p;
         swtch(&c->context, &p->context);
-        // printk("process [%s:%d] is running\n", p->name, p->pid); 
+        printk("process [%s:%d] is running\n", p->name, p->pid); 
         // Don't re-enable interrupts on release.
         mycpu()->intena = 0;
 
