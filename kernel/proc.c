@@ -5,6 +5,7 @@
 #include "spinlock.h"
 #include "proc.h"
 #include "defs.h"
+#include "procinfo.h" 
 
 struct cpu cpus[NCPU];
 
@@ -451,7 +452,7 @@ scheduler(void)
         p->state = RUNNING;
         c->proc = p;
         swtch(&c->context, &p->context);
-
+        // printk("process [%s:%d] is running\n", p->name, p->pid); 
         // Don't re-enable interrupts on release.
         mycpu()->intena = 0;
 
@@ -701,3 +702,55 @@ procdump(void)
     printk("\n");
   }
 }
+
+int numRunningProcs() { 
+  struct proc *p; 
+  int numRunning = 0; 
+  for(p = proc; p < &proc[NPROC]; p++) { 
+    acquire(&p->lock); 
+    if(p->state == RUNNING) { 
+      numRunning++; 
+    } 
+    release(&p->lock); 
+  } 
+  return numRunning;
+}
+
+int numSleepingProcs() { 
+  struct proc *p; 
+  int numSleeping = 0; 
+  for(p = proc; p < &proc[NPROC]; p++) { 
+    acquire(&p->lock); 
+    if(p->state == SLEEPING) { 
+      numSleeping++; 
+    } 
+    release(&p->lock); 
+  } 
+  return numSleeping; 
+}
+
+/* Current Running and Sleeping Processes
+ * Params:
+ *   - uBuff: pointer to userspace memory to write process info to 
+ *   - max: integer representing the size of uBuff in procInfo size segments. generally just NPROC. 
+*/ 
+int crsp(uint64 uBuff, int max) {
+  struct proc *p; // process table
+  procInfo kBuff[max]; // kernel space buffer
+  int n = 0; 
+  for(p = proc; p < &proc[NPROC] && n < max; p++) { // typical calls numProcs will always equal NPROC
+    acquire(&p->lock); 
+    if(p->state == SLEEPING || p->state == RUNNING) { 
+      safestrcpy(kBuff[n].name, p->name, sizeof(kBuff[n].name)); 
+      kBuff[n].pid = p->pid; 
+      kBuff[n].state = p->state; 
+      n++; 
+    }
+    release(&p->lock); 
+  }
+// int copyout(pagetable_t pagetable, uint64 dstva, char *src, uint64 len);
+  if(copyout(myproc()->pagetable, myproc()->sz, uBuff, (char*) kBuff, n * sizeof(procInfo)) < 0) { 
+      return -1; // error in copying from kernel to userspace. 
+  }
+  return n; 
+} 
